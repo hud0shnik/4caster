@@ -13,11 +13,10 @@ import (
 const (
 	CmdStart = "start"
 
-	BtnSum   = "Сумма"
-	BtnCalc  = "Расчёт"
+	BtnCalc = "Расчёт"
 
-	BtnByFrames    = "По фреймам"
-	BtnByDuration  = "По длительности сцены"
+	BtnByFrames   = "По фреймам"
+	BtnByDuration = "По длительности сцены"
 
 	BtnNoTiles = "Без tiles"
 	BtnTiles   = "С tiles"
@@ -74,7 +73,6 @@ func sendMenu(chatID int64, bot *tgbotapi.BotAPI, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton(BtnSum),
 			tgbotapi.NewKeyboardButton(BtnCalc),
 		),
 	)
@@ -126,17 +124,13 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	text := strings.TrimSpace(update.Message.Text)
 
 	switch text {
-	case BtnSum:
-		setStep(chatID, stepSumFirst)
-		send(chatID, bot, "Введи первое число:")
-		return
 	case BtnCalc:
 		setStep(chatID, stepCalcPickMode)
 		sendCalcMenu(chatID, bot, "Расчёт. Как задаём параметры?")
 		return
 	case BtnByFrames:
 		setStep(chatID, stepCalcFrames)
-		sendTilesPickMenu(chatID, bot, "По фреймам — tiles?")
+		sendTilesPickMenu(chatID, bot, "Выбери опцию")
 		return
 	case BtnNoTiles:
 		setStep(chatID, stepCalcFrames)
@@ -203,8 +197,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		}
 		F := st.a
 		totalSec := F*t + F*8
-		reply := fmt.Sprintf("F=%g, t=%s\nF*t + F*8с = %.0fс\nРезультат: %s",
-			F, formatDuration(t), totalSec, formatDuration(totalSec))
+		reply := fmt.Sprintf("Результат: %s", formatDuration(totalSec))
 		reset(chatID)
 		sendMenu(chatID, bot, reply)
 
@@ -240,8 +233,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		T := st.a
 		F := st.b
 		totalSec := (T*t)*F + F*8
-		reply := fmt.Sprintf("T=%g, F=%g, t=%s\n(T*t)*F + F*8с = %.0fс\nРезультат: %s",
-			T, F, formatDuration(t), totalSec, formatDuration(totalSec))
+		reply := fmt.Sprintf("Результат: %s", formatDuration(totalSec))
 		reset(chatID)
 		sendMenu(chatID, bot, reply)
 
@@ -279,14 +271,13 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		fps := st.b
 		F := P * fps
 		totalSec := F*t + F*8
-		reply := fmt.Sprintf("P=%s, fps=%g → F=P*fps=%g\nt=%s\nF*t + F*8с = %.0fс\nРезультат: %s",
-			formatDuration(P), fps, F, formatDuration(t), totalSec, formatDuration(totalSec))
+		reply := fmt.Sprintf("Результат: %s", formatDuration(totalSec))
 		reset(chatID)
 		sendMenu(chatID, bot, reply)
 
 	default:
 		sendMenu(chatID, bot,
-			"Выбери действие: «"+BtnSum+"» или «"+BtnCalc+"».")
+			"Выбери действие: «"+BtnCalc+"».")
 	}
 }
 
