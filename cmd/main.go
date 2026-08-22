@@ -38,7 +38,7 @@ func main() {
 		case update.Message != nil && update.Message.IsCommand() && update.Message.Command() == handler.CmdStart:
 			handler.Start(update, bot)
 		case update.Message != nil && update.Message.Text != "":
-			handler.SquareMessage(update, bot)
+			handler.HandleMessage(update, bot)
 		}
 	}
 }

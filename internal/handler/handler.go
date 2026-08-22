@@ -2,22 +2,60 @@ package handler
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 const (
-	CmdStart  = "start"
-	BtnSquare = "Посчитать n²"
+	CmdStart         = "start"
+	BtnSum           = "Посчитать сумму"
+	BtnCalc          = "Рендер без тайлов"
+	BtnTiles         = "Рендер с тайлами"
+	BtnSceneDuration = "Длительность сцены"
+)
+
+type step int
+
+const (
+	stepIdle step = iota
+	stepSumFirst
+	stepSumSecond
+	stepCalcFrames
+	stepCalcTime
+	stepTilesT
+	stepTilesF
+	stepTilest
+	stepTanyaP
+	stepTanyaFps
+	stepTanyat
+)
+
+type calcState struct {
+	step step
+	a    float64
+	b    float64
+}
+
+var (
+	statesMu sync.Mutex
+	states   = map[int64]*calcState{}
 )
 
 func Start(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Привет! Жми кнопку, потом введи число — я возведу его в квадрат.")
+	reset(update.Message.Chat.ID)
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Привет! Выбери, что считать.")
 	msg.ReplyMarkup = tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButton(BtnSquare),
+			tgbotapi.NewKeyboardButton(BtnSum),
+			tgbotapi.NewKeyboardButton(BtnCalc),
+		),
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButton(BtnTiles),
+			tgbotapi.NewKeyboardButton(BtnSceneDuration),
 		),
 	)
 	if _, err := bot.Send(msg); err != nil {
@@ -25,25 +63,264 @@ func Start(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	}
 }
 
-func SquareMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
+	chatID := update.Message.Chat.ID
 	text := strings.TrimSpace(update.Message.Text)
 
-	if text == BtnSquare {
-		if _, err := bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Введи число:")); err != nil {
-			fmt.Println("send error:", err)
-		}
+	switch text {
+	case BtnSum:
+		setStep(chatID, stepSumFirst)
+		bot.Send(tgbotapi.NewMessage(chatID, "Введи первое число:"))
+		return
+	case BtnCalc:
+		setStep(chatID, stepCalcFrames)
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Рендер БЕЗ tiles.\nВведи F — количество фреймов в сцене (целое число):"))
+		return
+	case BtnTiles:
+		setStep(chatID, stepTilesT)
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Рендер С tiles.\nВведи T — количество tile на один фрейм (целое число):"))
+		return
+	case BtnSceneDuration:
+		setStep(chatID, stepTanyaP)
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Введи P — длительность анимации.\n"+
+				"Формат: 8с, 8s, 1м30с, 1m30s, 1h2m, 90 — секунды или минуты, можно больше часа."))
 		return
 	}
 
-	n, err := strconv.ParseFloat(text, 64)
-	if err != nil {
-		if _, err := bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Это не число. Попробуй ещё раз.")); err != nil {
-			fmt.Println("send error:", err)
+	st := getState(chatID)
+
+	switch st.step {
+	case stepSumFirst:
+		n, err := parseNumber(text)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "Это не число. Попробуй ещё раз."))
+			return
 		}
-		return
+		st.a = n
+		st.step = stepSumSecond
+		bot.Send(tgbotapi.NewMessage(chatID, "Введи второе число:"))
+
+	case stepSumSecond:
+		n, err := parseNumber(text)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID, "Это не число. Попробуй ещё раз."))
+			return
+		}
+		result := st.a + n
+		reply := fmt.Sprintf("%g + %g = %g", st.a, n, result)
+		reset(chatID)
+		bot.Send(tgbotapi.NewMessage(chatID, reply))
+
+	case stepCalcFrames:
+		F, err := parseInt(text)
+		if err != nil || F <= 0 {
+			bot.Send(tgbotapi.NewMessage(chatID, "F должно быть положительным целым. Попробуй ещё раз."))
+			return
+		}
+		st.a = float64(F)
+		st.step = stepCalcTime
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Теперь введи t — время рендера одного фрейма.\n"+
+				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант, но меньше часа."))
+
+	case stepCalcTime:
+		t, err := parseDuration(text)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID,
+				"Не понял время. Примеры: 3м4с, 3m4s, 1h2m, 90, 120с. Попробуй ещё раз."))
+			return
+		}
+		F := st.a
+		totalSec := F*t + F*8
+		reply := fmt.Sprintf("F=%g, t=%s\nF*t + F*8с = %.0fс\nРезультат: %s",
+			F, formatDuration(t), totalSec, formatDuration(totalSec))
+		reset(chatID)
+		bot.Send(tgbotapi.NewMessage(chatID, reply))
+
+	case stepTilesT:
+		T, err := parseInt(text)
+		if err != nil || T <= 0 {
+			bot.Send(tgbotapi.NewMessage(chatID, "T должно быть положительным целым. Попробуй ещё раз."))
+			return
+		}
+		st.a = float64(T)
+		st.step = stepTilesF
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Введи F — количество фреймов в сцене (целое число):"))
+
+	case stepTilesF:
+		F, err := parseInt(text)
+		if err != nil || F <= 0 {
+			bot.Send(tgbotapi.NewMessage(chatID, "F должно быть положительным целым. Попробуй ещё раз."))
+			return
+		}
+		st.b = float64(F)
+		st.step = stepTilest
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Введи t — время рендера одного tile.\n"+
+				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант, но меньше часа."))
+
+	case stepTilest:
+		t, err := parseDuration(text)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID,
+				"Не понял время. Примеры: 3м4с, 3m4s, 1h2m, 90, 120с. Попробуй ещё раз."))
+			return
+		}
+		T := st.a
+		F := st.b
+		totalSec := (T*t)*F + F*8
+		reply := fmt.Sprintf("T=%g, F=%g, t=%s\n(T*t)*F + F*8с = %.0fс\nРезультат: %s",
+			T, F, formatDuration(t), totalSec, formatDuration(totalSec))
+		reset(chatID)
+		bot.Send(tgbotapi.NewMessage(chatID, reply))
+
+	case stepTanyaP:
+		P, err := parseDurationAny(text)
+		if err != nil || P <= 0 {
+			bot.Send(tgbotapi.NewMessage(chatID,
+				"Не понял длительность. Примеры: 8с, 8s, 1м30с, 1m30s, 1h2m, 90. Попробуй ещё раз."))
+			return
+		}
+		st.a = P
+		st.step = stepTanyaFps
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Введи fps — количество кадров в секунду (целое, обычно 24/30/60):"))
+
+	case stepTanyaFps:
+		fps, err := parseInt(text)
+		if err != nil || fps <= 0 {
+			bot.Send(tgbotapi.NewMessage(chatID, "fps должно быть положительным целым. Попробуй ещё раз."))
+			return
+		}
+		st.b = float64(fps)
+		st.step = stepTanyat
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Введи t — время рендера одного фрейма.\n"+
+				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант, но меньше часа."))
+
+	case stepTanyat:
+		t, err := parseDuration(text)
+		if err != nil {
+			bot.Send(tgbotapi.NewMessage(chatID,
+				"Не понял время. Примеры: 3м4с, 3m4s, 1h2m, 90, 120с. Попробуй ещё раз."))
+			return
+		}
+		P := st.a
+		fps := st.b
+		F := P * fps
+		totalSec := F*t + F*8
+		reply := fmt.Sprintf("P=%s, fps=%g → F=P*fps=%g\nt=%s\nF*t + F*8с = %.0fс\nРезультат: %s",
+			formatDuration(P), fps, F, formatDuration(t), totalSec, formatDuration(totalSec))
+		reset(chatID)
+		bot.Send(tgbotapi.NewMessage(chatID, reply))
+
+	default:
+		bot.Send(tgbotapi.NewMessage(chatID,
+			"Сначала нажми «"+BtnSum+"», «"+BtnCalc+"», «"+BtnTiles+"» или «"+BtnSceneDuration+"»."))
 	}
-	reply := fmt.Sprintf("%g² = %g", n, n*n)
-	if _, err := bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, reply)); err != nil {
-		fmt.Println("send error:", err)
+}
+
+func parseNumber(s string) (float64, error) {
+	return strconv.ParseFloat(strings.ReplaceAll(s, ",", "."), 64)
+}
+
+func parseInt(s string) (int, error) {
+	return strconv.Atoi(strings.TrimSpace(s))
+}
+
+var durationRe = regexp.MustCompile(`(?i)(\d+)\s*([hmsчмс])`)
+
+func parseDuration(s string) (float64, error) {
+	return parseDurationRaw(s, true)
+}
+
+func parseDurationAny(s string) (float64, error) {
+	return parseDurationRaw(s, false)
+}
+
+func parseDurationRaw(s string, limitHour bool) (float64, error) {
+	s = strings.TrimSpace(s)
+
+	if matches := durationRe.FindAllStringSubmatch(s, -1); len(matches) > 0 {
+		var total float64
+		matched := 0
+		for _, m := range matches {
+			val, err := strconv.ParseFloat(m[1], 64)
+			if err != nil {
+				return 0, fmt.Errorf("bad number %q", m[1])
+			}
+			switch strings.ToLower(m[2]) {
+			case "h", "ч":
+				total += val * 3600
+			case "m", "м":
+				total += val * 60
+			case "s", "с":
+				total += val
+			}
+			matched += len(m[0])
+		}
+		if matched != len(s) {
+			return 0, fmt.Errorf("unexpected chars in %q", s)
+		}
+		if limitHour && total >= 3600 {
+			return 0, fmt.Errorf("t must be < 1 hour, got %.0f sec", total)
+		}
+		return total, nil
 	}
+
+	clean := strings.TrimSuffix(strings.TrimSuffix(strings.ToLower(s), "с"), "s")
+	clean = strings.TrimSpace(clean)
+	n, err := strconv.ParseFloat(strings.ReplaceAll(clean, ",", "."), 64)
+	if err != nil {
+		return 0, err
+	}
+	if limitHour && n >= 3600 {
+		return 0, fmt.Errorf("t must be < 1 hour")
+	}
+	return n, nil
+}
+
+func formatDuration(sec float64) string {
+	total := int(sec + 0.5)
+	h := total / 3600
+	m := (total % 3600) / 60
+	s := total % 60
+	if h > 0 {
+		return fmt.Sprintf("%dч %dм %dс", h, m, s)
+	}
+	return fmt.Sprintf("%dм %dс", m, s)
+}
+
+func getState(chatID int64) *calcState {
+	statesMu.Lock()
+	defer statesMu.Unlock()
+	st, ok := states[chatID]
+	if !ok {
+		st = &calcState{}
+		states[chatID] = st
+	}
+	return st
+}
+
+func setStep(chatID int64, s step) {
+	statesMu.Lock()
+	defer statesMu.Unlock()
+	st, ok := states[chatID]
+	if !ok {
+		st = &calcState{}
+		states[chatID] = st
+	}
+	st.step = s
+	st.a = 0
+	st.b = 0
+}
+
+func reset(chatID int64) {
+	statesMu.Lock()
+	defer statesMu.Unlock()
+	delete(states, chatID)
 }
