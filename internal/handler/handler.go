@@ -86,7 +86,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		setStep(chatID, stepTanyaP)
 		bot.Send(tgbotapi.NewMessage(chatID,
 			"Введи P — длительность анимации.\n"+
-				"Формат: 8с, 8s, 1м30с, 1m30s, 1h2m, 90 — секунды или минуты, можно больше часа."))
+				"Формат: 8с, 8s, 1м30с, 1m30s, 1h2m, 90 — секунды или минуты"))
 		return
 	}
 
@@ -124,7 +124,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		st.step = stepCalcTime
 		bot.Send(tgbotapi.NewMessage(chatID,
 			"Теперь введи t — время рендера одного фрейма.\n"+
-				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант, но меньше часа."))
+				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант"))
 
 	case stepCalcTime:
 		t, err := parseDuration(text)
@@ -161,7 +161,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		st.step = stepTilest
 		bot.Send(tgbotapi.NewMessage(chatID,
 			"Введи t — время рендера одного tile.\n"+
-				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант, но меньше часа."))
+				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант"))
 
 	case stepTilest:
 		t, err := parseDuration(text)
@@ -200,7 +200,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		st.step = stepTanyat
 		bot.Send(tgbotapi.NewMessage(chatID,
 			"Введи t — время рендера одного фрейма.\n"+
-				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант, но меньше часа."))
+				"Формат: 3м4с, 3m4s, 1h2m, 90 (сек), 120с — любой вариант"))
 
 	case stepTanyat:
 		t, err := parseDuration(text)
@@ -235,14 +235,14 @@ func parseInt(s string) (int, error) {
 var durationRe = regexp.MustCompile(`(?i)(\d+)\s*([hmsчмс])`)
 
 func parseDuration(s string) (float64, error) {
-	return parseDurationRaw(s, true)
+	return parseDurationRaw(s)
 }
 
 func parseDurationAny(s string) (float64, error) {
-	return parseDurationRaw(s, false)
+	return parseDurationRaw(s)
 }
 
-func parseDurationRaw(s string, limitHour bool) (float64, error) {
+func parseDurationRaw(s string) (float64, error) {
 	s = strings.TrimSpace(s)
 
 	if matches := durationRe.FindAllStringSubmatch(s, -1); len(matches) > 0 {
@@ -266,9 +266,6 @@ func parseDurationRaw(s string, limitHour bool) (float64, error) {
 		if matched != len(s) {
 			return 0, fmt.Errorf("unexpected chars in %q", s)
 		}
-		if limitHour && total >= 3600 {
-			return 0, fmt.Errorf("t must be < 1 hour, got %.0f sec", total)
-		}
 		return total, nil
 	}
 
@@ -277,9 +274,6 @@ func parseDurationRaw(s string, limitHour bool) (float64, error) {
 	n, err := strconv.ParseFloat(strings.ReplaceAll(clean, ",", "."), 64)
 	if err != nil {
 		return 0, err
-	}
-	if limitHour && n >= 3600 {
-		return 0, fmt.Errorf("t must be < 1 hour")
 	}
 	return n, nil
 }
