@@ -13,5 +13,6 @@ resources:
 
 images:
   - name: 4caster
-    newName: hud0shnik/myapp
+    newName: docker.io/hud0shnik/4caster
     newTag: latest
+    digest: ""
