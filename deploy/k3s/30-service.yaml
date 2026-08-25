@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: 4caster
+  namespace: 4caster
+  labels:
+    app: 4caster
+spec:
+  type: ClusterIP
+  selector:
+    app: 4caster
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
