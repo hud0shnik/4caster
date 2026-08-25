@@ -41,9 +41,9 @@ const (
 	stepTilesF
 	stepTilest
 
-	stepTanyaP
-	stepTanyaFps
-	stepTanyat
+	stepDurPeriod
+	stepDurFps
+	stepDurTime
 )
 
 type calcState struct {
@@ -141,7 +141,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		send(chatID, bot, "Сколько tiles в одном фрейме? (целое число)")
 		return
 	case BtnByDuration:
-		setStep(chatID, stepTanyaP)
+		setStep(chatID, stepDurPeriod)
 		send(chatID, bot,
 			"По длительности сцены.\nСколько времени длится сцена?\n"+
 				"Формат: 8с, 8s, 1м30с, 1m30s, 1h2m, 90")
@@ -237,7 +237,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		reset(chatID)
 		sendMenu(chatID, bot, reply)
 
-	case stepTanyaP:
+	case stepDurPeriod:
 		P, err := parseDuration(text)
 		if err != nil || P <= 0 {
 			send(chatID, bot,
@@ -245,22 +245,22 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 			return
 		}
 		st.a = P
-		st.step = stepTanyaFps
+		st.step = stepDurFps
 		send(chatID, bot, "Сколько fps? (целое, обычно 24/30/60)")
 
-	case stepTanyaFps:
+	case stepDurFps:
 		fps, err := parseInt(text)
 		if err != nil || fps <= 0 {
 			send(chatID, bot, "fps должно быть положительным целым. Попробуй ещё раз.")
 			return
 		}
 		st.b = float64(fps)
-		st.step = stepTanyat
+		st.step = stepDurTime
 		send(chatID, bot,
 			"Сколько длится рендер одного фрейма?\n"+
 				"Формат: 3м4с, 3m4s, 1h2m, 90, 120с")
 
-	case stepTanyat:
+	case stepDurTime:
 		t, err := parseDuration(text)
 		if err != nil {
 			send(chatID, bot,
