@@ -18,8 +18,8 @@ const (
 	BtnByFrames   = "По фреймам"
 	BtnByDuration = "По длительности сцены"
 
-	BtnNoTiles = "Без tiles"
-	BtnTiles   = "С tiles"
+	BtnNoTiles = "Без тайлов"
+	BtnTiles   = "С тайлами"
 
 	BtnBack = "Назад"
 )
