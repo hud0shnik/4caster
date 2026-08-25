@@ -19,8 +19,8 @@ spec:
     spec:
       containers:
         - name: 4caster
-          image: ghcr.io/hud0shnik/4caster:latest
-          imagePullPolicy: IfNotPresent
+          image: 4caster:latest
+          imagePullPolicy: Always
           env:
             - name: TELEGRAM_BOT_TOKEN
               valueFrom:

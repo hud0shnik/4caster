@@ -5,11 +5,13 @@ namespace: 4caster
 
 resources:
   - 00-namespace.yaml
+  - 05-rbac.yaml
   - 10-secret.yaml
   - 20-deployment.yaml
   - 30-service.yaml
+  - 40-cronjob.yaml
 
 images:
-  - name: ghcr.io/hud0shnik/4caster
-    newName: ghcr.io/hud0shnik/4caster
+  - name: 4caster
+    newName: hud0shnik/myapp
     newTag: latest

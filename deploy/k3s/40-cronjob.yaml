@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: 4caster-rollout-restart
+  namespace: 4caster
+  labels:
+    app: 4caster
+spec:
+  schedule: "*/5 * * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 120
+      template:
+        metadata:
+          labels:
+            app: 4caster
+            component: rollout-watchdog
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: 4caster-rollout
+          containers:
+            - name: kubectl
+              image: bitnami/kubectl:1.30
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  DESIRED=$(kubectl get deploy 4caster -o jsonpath='{.spec.template.spec.containers[0].image}')
+                  CURRENT=$(kubectl get deploy 4caster -o jsonpath='{.status.observedGeneration}')
+                  LAST_HASH=$(kubectl get pods -l app=4caster -o jsonpath='{.items[0].metadata.labels.kubernetes\.io\/hash}' 2>/dev/null || echo "")
+                  NEW_HASH=$(kubectl get deploy 4caster -o jsonpath='{.metadata.generation}')
+                  echo "image=$DESIRED gen=$NEW_HASH lastGen=$LAST_HASH"
+                  if [ "$NEW_HASH" != "$LAST_HASH" ]; then
+                    echo "rolling restart"
+                    kubectl rollout restart deploy/4caster
+                  else
+                    echo "up to date"
+                  fi
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 65534
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]

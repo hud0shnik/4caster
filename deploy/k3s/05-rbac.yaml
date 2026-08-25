@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: 4caster-rollout
+  namespace: 4caster
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: 4caster-rollout
+  namespace: 4caster
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: 4caster-rollout
+  namespace: 4caster
+subjects:
+  - kind: ServiceAccount
+    name: 4caster-rollout
+    namespace: 4caster
+roleRef:
+  kind: Role
+  name: 4caster-rollout
+  apiGroup: rbac.authorization.k8s.io
