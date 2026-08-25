@@ -13,7 +13,7 @@ import (
 const (
 	CmdStart = "start"
 
-	BtnCalc = "Расчёт"
+	BtnCalc = "Рендер"
 
 	BtnByFrames   = "По фреймам"
 	BtnByDuration = "По длительности сцены"
@@ -126,29 +126,29 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	switch text {
 	case BtnCalc:
 		setStep(chatID, stepCalcPickMode)
-		sendCalcMenu(chatID, bot, "Расчёт. Как задаём параметры?")
+		sendCalcMenu(chatID, bot, "Давай посчитаю. Как задаём параметры?")
 		return
 	case BtnByFrames:
 		setStep(chatID, stepCalcFrames)
-		sendTilesPickMenu(chatID, bot, "Выбери опцию")
+		sendTilesPickMenu(chatID, bot, "Окей, а что по поводу тайлов?")
 		return
 	case BtnNoTiles:
 		setStep(chatID, stepCalcFrames)
-		send(chatID, bot, "Сколько фреймов в сцене? (целое число)")
+		send(chatID, bot, "Сколько фреймов в сцене?")
 		return
 	case BtnTiles:
 		setStep(chatID, stepTilesT)
-		send(chatID, bot, "Сколько tiles в одном фрейме? (целое число)")
+		send(chatID, bot, "Сколько тайлов в одном фрейме?")
 		return
 	case BtnByDuration:
 		setStep(chatID, stepDurPeriod)
 		send(chatID, bot,
-			"По длительности сцены.\nСколько времени длится сцена?\n"+
-				"Формат: 8с, 8s, 1м30с, 1m30s, 1h2m, 90")
+			"Сколько длится сцена?\n"+
+				"Формат: 6с, 12s, 1м9с, 9m8s")
 		return
 	case BtnBack:
 		setStep(chatID, stepIdle)
-		sendMenu(chatID, bot, "Главное меню.")
+		sendMenu(chatID, bot, "Что считаем?")
 		return
 	}
 
@@ -179,20 +179,20 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	case stepCalcFrames:
 		F, err := parseInt(text)
 		if err != nil || F <= 0 {
-			send(chatID, bot, "F должно быть положительным целым. Попробуй ещё раз.")
+			send(chatID, bot, "F должно быть положительным целым числом. Попробуй ещё раз.")
 			return
 		}
 		st.a = float64(F)
 		st.step = stepCalcTime
 		send(chatID, bot,
 			"Сколько длится рендер одного фрейма?\n"+
-				"Формат: 3м4с, 3m4s, 1h2m, 90, 120с")
+				"Формат: 6с, 12s, 1м9с, 9m8s")
 
 	case stepCalcTime:
 		t, err := parseDuration(text)
 		if err != nil {
 			send(chatID, bot,
-				"Не понял время. Примеры: 3м4с, 3m4s, 1h2m, 90, 120с. Попробуй ещё раз.")
+				"Не понял, сколько времени?\nПримеры: 6с, 12s, 1м9с, 9m8s")
 			return
 		}
 		F := st.a
@@ -209,7 +209,7 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		}
 		st.a = float64(T)
 		st.step = stepTilesF
-		send(chatID, bot, "Сколько фреймов в сцене? (целое число)")
+		send(chatID, bot, "Сколько фреймов в сцене?")
 
 	case stepTilesF:
 		F, err := parseInt(text)
@@ -220,14 +220,14 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		st.b = float64(F)
 		st.step = stepTilest
 		send(chatID, bot,
-			"Сколько длится рендер одного tile?\n"+
-				"Формат: 3м4с, 3m4s, 1h2m, 90, 120с")
+			"Сколько длится рендер одного тайла?\n"+
+				"Формат: 6с, 12s, 1м9с, 9m8s")
 
 	case stepTilest:
 		t, err := parseDuration(text)
 		if err != nil {
 			send(chatID, bot,
-				"Не понял время. Примеры: 3м4с, 3m4s, 1h2m, 90, 120с. Попробуй ещё раз.")
+				"Не понял, сколько времени?\nПримеры: 6с, 12s, 1м9с, 9m8s")
 			return
 		}
 		T := st.a
@@ -241,12 +241,12 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		P, err := parseDuration(text)
 		if err != nil || P <= 0 {
 			send(chatID, bot,
-				"Не понял длительность. Примеры: 8с, 8s, 1м30с, 1m30s, 1h2m, 90. Попробуй ещё раз.")
+				"Не понял, сколько времени?\nПримеры: 6с, 12s, 1м9с, 9m8s")
 			return
 		}
 		st.a = P
 		st.step = stepDurFps
-		send(chatID, bot, "Сколько fps? (целое, обычно 24/30/60)")
+		send(chatID, bot, "Сколько fps?")
 
 	case stepDurFps:
 		fps, err := parseInt(text)
@@ -258,13 +258,13 @@ func HandleMessage(update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 		st.step = stepDurTime
 		send(chatID, bot,
 			"Сколько длится рендер одного фрейма?\n"+
-				"Формат: 3м4с, 3m4s, 1h2m, 90, 120с")
+				"Формат: 6с, 12s, 1м9с, 9m8s")
 
 	case stepDurTime:
 		t, err := parseDuration(text)
 		if err != nil {
 			send(chatID, bot,
-				"Не понял время. Примеры: 3м4с, 3m4s, 1h2m, 90, 120с. Попробуй ещё раз.")
+				"Не понял, сколько времени?\nПримеры: 6с, 12s, 1м9с, 9m8s")
 			return
 		}
 		P := st.a
